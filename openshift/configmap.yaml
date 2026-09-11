@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nestjs-backend-config
+data:
+  APP_ENV: openshift
+  GREETING_MESSAGE: Hello from NestJS on OpenShift
+  FEATURE_FLAGS: beta-items
+  LOG_LEVEL: debug
+  STARTUP_DELAY_MS: "3000"
+  DEMO_ENDPOINTS_ENABLED: "true"

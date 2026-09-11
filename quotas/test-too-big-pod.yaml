@@ -1,0 +1,13 @@
+# Applying this in dev must FAIL with "exceeded quota" - that's the point.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: too-big
+  namespace: dev
+spec:
+  containers:
+    - name: hog
+      image: registry.k8s.io/pause:3.9
+      resources:
+        requests: { cpu: "10", memory: 50Gi }
+        limits:   { cpu: "10", memory: 50Gi }

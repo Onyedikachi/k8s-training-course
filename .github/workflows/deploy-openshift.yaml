@@ -1,0 +1,61 @@
+name: Deploy to OpenShift
+
+on:
+  push:
+    branches: [openshift]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ACR_NAME: ${{ secrets.ACR_NAME }}
+  IMAGE_NAME: nestjs-backend
+  OPENSHIFT_NAMESPACE: ${{ secrets.OPENSHIFT_NAMESPACE }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build image in ACR
+        run: |
+          az acr build --registry "$ACR_NAME" \
+            --image "$IMAGE_NAME:${{ github.sha }}" --image "$IMAGE_NAME:openshift" \
+            --build-arg APP_VERSION="ocp-${GITHUB_SHA::7}" .
+
+      - name: Install oc
+        uses: redhat-actions/openshift-tools-installer@v1
+        with:
+          oc: '4'
+
+      - name: Login to OpenShift
+        uses: redhat-actions/oc-login@v1
+        with:
+          openshift_server_url: ${{ secrets.OPENSHIFT_SERVER }}
+          openshift_token: ${{ secrets.OPENSHIFT_TOKEN }}
+          namespace: ${{ env.OPENSHIFT_NAMESPACE }}
+          insecure_skip_tls_verify: true
+
+      - name: Deploy
+        run: |
+          IMAGE="$ACR_NAME.azurecr.io/$IMAGE_NAME:${{ github.sha }}"
+          sed "s|IMAGE_PLACEHOLDER|$IMAGE|" openshift/deployment.yaml | oc apply -n "$OPENSHIFT_NAMESPACE" -f -
+          oc apply -n "$OPENSHIFT_NAMESPACE" -f openshift/service.yaml -f openshift/route.yaml
+          oc rollout status deployment/nestjs-backend -n "$OPENSHIFT_NAMESPACE" --timeout=180s
+          echo "URL: https://$(oc get route nestjs-backend-route -n "$OPENSHIFT_NAMESPACE" -o jsonpath='{.spec.host}')"

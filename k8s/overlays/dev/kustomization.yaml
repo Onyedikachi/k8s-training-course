@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: dev
+resources:
+  - namespace.yaml
+  - ../../base
+labels:
+  - pairs:
+      environment: development
+    includeSelectors: false
+configMapGenerator:
+  - name: nestjs-backend-config
+    literals:
+      - APP_ENV=dev
+      - GREETING_MESSAGE=Hello from NestJS in the DEV namespace on AKS
+      - FEATURE_FLAGS=beta-items,verbose-info
+      - LOG_LEVEL=debug
+      - STARTUP_DELAY_MS=5000
+      - DEMO_ENDPOINTS_ENABLED=true

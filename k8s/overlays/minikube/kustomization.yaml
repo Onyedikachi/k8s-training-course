@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: dev
+resources:
+  - namespace.yaml
+  - ../../base
+patches:
+  - path: service-nodeport.yaml
+configMapGenerator:
+  - name: nestjs-backend-config
+    literals:
+      - APP_ENV=minikube
+      - GREETING_MESSAGE=Hello from NestJS on minikube
+      - FEATURE_FLAGS=beta-items
+      - LOG_LEVEL=debug
+      - STARTUP_DELAY_MS=5000
+      - DEMO_ENDPOINTS_ENABLED=true

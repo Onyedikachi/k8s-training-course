@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nestjs-backend-service
+  labels:
+    app: nestjs-backend
+spec:
+  type: ClusterIP
+  selector:
+    app: nestjs-backend
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: http

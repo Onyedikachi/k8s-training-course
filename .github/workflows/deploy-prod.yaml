@@ -1,0 +1,70 @@
+name: Deploy to Production (AKS)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ACR_NAME: ${{ secrets.ACR_NAME }}
+  RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+  AKS_CLUSTER_NAME: ${{ secrets.AKS_CLUSTER_NAME }}
+  IMAGE_NAME: nestjs-backend
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:all
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    # GitHub auto-creates this environment on first run. Add "Required reviewers" in
+    # Settings > Environments > production to get a manual approval gate.
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build image in ACR
+        run: |
+          az acr build \
+            --registry "$ACR_NAME" \
+            --image "$IMAGE_NAME:${{ github.sha }}" \
+            --image "$IMAGE_NAME:stable" \
+            --build-arg APP_VERSION="${GITHUB_SHA::7}" \
+            .
+
+      - name: Set AKS context
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ env.RESOURCE_GROUP }}
+          cluster-name: ${{ env.AKS_CLUSTER_NAME }}
+
+      - name: Deploy (kustomize overlay prod)
+        run: scripts/deploy.sh prod "$ACR_NAME.azurecr.io/$IMAGE_NAME:${{ github.sha }}"
+
+      - name: Show public endpoint
+        run: |
+          kubectl get svc nestjs-backend-service -n prod
+          IP=$(kubectl get svc nestjs-backend-service -n prod -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          [ -n "$IP" ] && curl -s "http://$IP/" || echo "LoadBalancer IP not assigned yet"

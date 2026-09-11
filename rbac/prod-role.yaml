@@ -1,0 +1,29 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: prod
+  name: production-role
+rules:
+  - apiGroups: ["", "apps"]
+    resources: ["pods", "deployments", "replicasets", "services", "configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["update", "patch"]   # can roll a new image, cannot delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prod-deployer-binding
+  namespace: prod
+subjects:
+  - kind: ServiceAccount
+    name: prod-deployer
+    namespace: prod
+roleRef:
+  kind: Role
+  name: production-role
+  apiGroup: rbac.authorization.k8s.io
