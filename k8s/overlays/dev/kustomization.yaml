@@ -12,7 +12,7 @@ configMapGenerator:
   - name: nestjs-backend-config
     literals:
       - APP_ENV=dev
-      - GREETING_MESSAGE=Hello from NestJS in the DEV namespace on AKS
+      - GREETING_MESSAGE=Hello from CI, DEV
       - FEATURE_FLAGS=beta-items,verbose-info
       - LOG_LEVEL=debug
       - STARTUP_DELAY_MS=5000

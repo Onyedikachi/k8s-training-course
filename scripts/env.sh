@@ -4,8 +4,8 @@ if [[ -f "$(dirname "${BASH_SOURCE[0]}")/../.training-env" ]]; then
   # shellcheck disable=SC1091
   source "$(dirname "${BASH_SOURCE[0]}")/../.training-env"
 fi
-export LOCATION="${LOCATION:-westeurope}"
-export RESOURCE_GROUP="${RESOURCE_GROUP:-k8s-training-rg}"
+export LOCATION="${LOCATION:-uksouth}"
+export RESOURCE_GROUP="${RESOURCE_GROUP:-devescops-rg}"
 export AKS_CLUSTER_NAME="${AKS_CLUSTER_NAME:-training-aks}"
 # ACR names: globally unique, 5-50 lowercase alphanumerics. Set once, persist it.
 export ACR_NAME="${ACR_NAME:-}"

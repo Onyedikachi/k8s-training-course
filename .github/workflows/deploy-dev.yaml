@@ -9,15 +9,13 @@ permissions:
   id-token: write   # OIDC login to Azure
   contents: read
 
-env:
-  ACR_NAME: ${{ secrets.ACR_NAME }}
-  RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
-  AKS_CLUSTER_NAME: ${{ secrets.AKS_CLUSTER_NAME }}
-  IMAGE_NAME: nestjs-backend
-
 jobs:
   build-test-deploy:
     runs-on: ubuntu-latest
+    environment: 
+      name: production
+    env:
+      IMAGE_NAME: nestjs-backend
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +27,51 @@ jobs:
       - run: npm run build
       - run: npm run test:all
 
+      - name: Debug Azure Secrets Configuration
+        run: |
+          echo "=== Debugging Azure Environment Variables ==="
+          
+          # Length check
+          echo "Client ID Length: ${#CLIENT_ID}"
+          echo "Tenant ID Length: ${#TENANT_ID}"
+          echo "Subscription ID Length: ${#SUB_ID}"
+          
+          # Partial string check (shows first 4 and last 4 characters)
+          if [ ${#CLIENT_ID} -gt 8 ]; then echo "Client ID Hint: ${CLIENT_ID:0:4}...${CLIENT_ID: -4}"; fi
+          if [ ${#TENANT_ID} -gt 8 ]; then echo "Tenant ID Hint: ${TENANT_ID:0:4}...${TENANT_ID: -4}"; fi
+          if [ ${#SUB_ID} -gt 8 ]; then echo "Subscription ID Hint: ${SUB_ID:0:4}...${SUB_ID: -4}"; fi
+        env:
+          CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          
+      - name: Debug GitHub OIDC context
+        run: |
+          echo "GITHUB_REPOSITORY=$GITHUB_REPOSITORY"
+          echo "GITHUB_REPOSITORY_OWNER=$GITHUB_REPOSITORY_OWNER"
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "GITHUB_REF_NAME=$GITHUB_REF_NAME"
+          echo "GITHUB_WORKFLOW=$GITHUB_WORKFLOW"
+          echo "GITHUB_EVENT_NAME=$GITHUB_EVENT_NAME"
+          echo "GITHUB_ENVIRONMENT=$GITHUB_ENVIRONMENT"
+      
+      
+      - name: Inspect OIDC claims
+        shell: bash
+        run: |
+          TOKEN=$(curl -sSf \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" \
+            | jq -r '.value')
+
+          PAYLOAD=$(echo "$TOKEN" | cut -d '.' -f2)
+
+          case $((${#PAYLOAD} % 4)) in
+            2) PAYLOAD="${PAYLOAD}==" ;;
+            3) PAYLOAD="${PAYLOAD}=" ;;
+          esac
+
+          echo "$PAYLOAD" | base64 -d | jq .
       - name: Azure login (OIDC, no stored secret)
         uses: azure/login@v2
         with:
@@ -39,7 +82,7 @@ jobs:
       - name: Build image in ACR (no Docker needed on the runner)
         run: |
           az acr build \
-            --registry "$ACR_NAME" \
+            --registry "${{ vars.ACR_NAME }}" \
             --image "$IMAGE_NAME:${{ github.sha }}" \
             --image "$IMAGE_NAME:dev" \
             --build-arg APP_VERSION="dev-${GITHUB_SHA::7}" \
@@ -48,11 +91,14 @@ jobs:
       - name: Set AKS context
         uses: azure/aks-set-context@v4
         with:
-          resource-group: ${{ env.RESOURCE_GROUP }}
-          cluster-name: ${{ env.AKS_CLUSTER_NAME }}
+          resource-group: ${{ vars.RESOURCE_GROUP }}
+          cluster-name: ${{ vars.AKS_CLUSTER_NAME }}
+
+      - name: Make deploy and smoke test script script executable
+        run: chmod +x scripts/deploy.sh && chmod +x scripts/smoke-test.sh
 
       - name: Deploy (kustomize overlay dev)
-        run: scripts/deploy.sh dev "$ACR_NAME.azurecr.io/$IMAGE_NAME:${{ github.sha }}"
+        run: scripts/deploy.sh dev "${{ vars.ACR_NAME }}.azurecr.io/$IMAGE_NAME:${{ github.sha }}"
 
       - name: Smoke test
         run: scripts/smoke-test.sh dev
