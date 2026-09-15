@@ -94,8 +94,8 @@ jobs:
           resource-group: ${{ vars.RESOURCE_GROUP }}
           cluster-name: ${{ vars.AKS_CLUSTER_NAME }}
 
-      - name: Make deploy script executable
-        run: chmod +x scripts/deploy.sh
+      - name: Make deploy and smoke test script script executable
+        run: chmod +x scripts/deploy.sh && chmod +x scripts/smoke-test.sh
 
       - name: Deploy (kustomize overlay dev)
         run: scripts/deploy.sh dev "${{ vars.ACR_NAME }}.azurecr.io/$IMAGE_NAME:${{ github.sha }}"
