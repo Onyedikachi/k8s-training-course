@@ -26,6 +26,23 @@ jobs:
       - run: npm run build
       - run: npm run test:all
 
+      - name: Debug Azure Secrets Configuration
+        run: |
+          echo "=== Debugging Azure Environment Variables ==="
+          
+          # Length check
+          echo "Client ID Length: ${#CLIENT_ID}"
+          echo "Tenant ID Length: ${#TENANT_ID}"
+          echo "Subscription ID Length: ${#SUB_ID}"
+          
+          # Partial string check (shows first 4 and last 4 characters)
+          if [ ${#CLIENT_ID} -gt 8 ]; then echo "Client ID Hint: ${CLIENT_ID:0:4}...${CLIENT_ID: -4}"; fi
+          if [ ${#TENANT_ID} -gt 8 ]; then echo "Tenant ID Hint: ${TENANT_ID:0:4}...${TENANT_ID: -4}"; fi
+          if [ ${#SUB_ID} -gt 8 ]; then echo "Subscription ID Hint: ${SUB_ID:0:4}...${SUB_ID: -4}"; fi
+        env:
+          CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: Azure login (OIDC, no stored secret)
         uses: azure/login@v2
         with:
