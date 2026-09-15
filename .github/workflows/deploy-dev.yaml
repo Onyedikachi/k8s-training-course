@@ -9,16 +9,12 @@ permissions:
   id-token: write   # OIDC login to Azure
   contents: read
 
-env:
-  ACR_NAME: ${{ secrets.ACR_NAME }}
-  RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
-  AKS_CLUSTER_NAME: ${{ secrets.AKS_CLUSTER_NAME }}
-  IMAGE_NAME: nestjs-backend
-
 jobs:
   build-test-deploy:
     runs-on: ubuntu-latest
     environment: production
+    env:
+      IMAGE_NAME: nestjs-backend
     steps:
       - uses: actions/checkout@v4
 
@@ -40,7 +36,7 @@ jobs:
       - name: Build image in ACR (no Docker needed on the runner)
         run: |
           az acr build \
-            --registry "$ACR_NAME" \
+            --registry "${{ vars.ACR_NAME }}" \
             --image "$IMAGE_NAME:${{ github.sha }}" \
             --image "$IMAGE_NAME:dev" \
             --build-arg APP_VERSION="dev-${GITHUB_SHA::7}" \
@@ -49,8 +45,8 @@ jobs:
       - name: Set AKS context
         uses: azure/aks-set-context@v4
         with:
-          resource-group: ${{ env.RESOURCE_GROUP }}
-          cluster-name: ${{ env.AKS_CLUSTER_NAME }}
+          resource-group: ${{ vars.RESOURCE_GROUP }}
+          cluster-name: ${{ vars.AKS_CLUSTER_NAME }}
 
       - name: Deploy (kustomize overlay dev)
         run: scripts/deploy.sh dev "$ACR_NAME.azurecr.io/$IMAGE_NAME:${{ github.sha }}"
