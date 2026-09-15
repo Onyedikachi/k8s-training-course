@@ -10,9 +10,6 @@ permissions:
   contents: read
 
 env:
-  ACR_NAME: ${{ secrets.ACR_NAME }}
-  RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
-  AKS_CLUSTER_NAME: ${{ secrets.AKS_CLUSTER_NAME }}
   IMAGE_NAME: nestjs-backend
 
 jobs:
@@ -48,7 +45,7 @@ jobs:
       - name: Build image in ACR
         run: |
           az acr build \
-            --registry "$ACR_NAME" \
+            --registry "${{ vars.ACR_NAME }}" \
             --image "$IMAGE_NAME:${{ github.sha }}" \
             --image "$IMAGE_NAME:stable" \
             --build-arg APP_VERSION="${GITHUB_SHA::7}" \
@@ -57,11 +54,13 @@ jobs:
       - name: Set AKS context
         uses: azure/aks-set-context@v4
         with:
-          resource-group: ${{ env.RESOURCE_GROUP }}
-          cluster-name: ${{ env.AKS_CLUSTER_NAME }}
+          resource-group: ${{ vars.RESOURCE_GROUP }}
+          cluster-name: ${{ vars.AKS_CLUSTER_NAME }}
 
+      - name: Make deploy and smoke test script script executable
+        run: chmod +x scripts/deploy.sh && chmod +x scripts/smoke-test.sh
       - name: Deploy (kustomize overlay prod)
-        run: scripts/deploy.sh prod "$ACR_NAME.azurecr.io/$IMAGE_NAME:${{ github.sha }}"
+        run: scripts/deploy.sh prod "${{ vars.ACR_NAME }}.azurecr.io/$IMAGE_NAME:${{ github.sha }}"
 
       - name: Show public endpoint
         run: |
