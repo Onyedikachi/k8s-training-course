@@ -43,6 +43,42 @@ jobs:
           CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          
+      - name: Debug GitHub OIDC context
+        run: |
+          echo "GITHUB_REPOSITORY=$GITHUB_REPOSITORY"
+          echo "GITHUB_REPOSITORY_OWNER=$GITHUB_REPOSITORY_OWNER"
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "GITHUB_REF_NAME=$GITHUB_REF_NAME"
+          echo "GITHUB_WORKFLOW=$GITHUB_WORKFLOW"
+          echo "GITHUB_EVENT_NAME=$GITHUB_EVENT_NAME"
+          echo "GITHUB_ENVIRONMENT=$GITHUB_ENVIRONMENT"
+      
+      - name: Inspect OIDC claims
+        shell: bash
+        run: |
+          TOKEN=$(curl -sSf \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" \
+            | jq -r '.value')
+
+          PAYLOAD=$(echo "$TOKEN" | cut -d '.' -f2)
+
+          # Add padding for base64 decoding
+          case $((${#PAYLOAD} % 4)) in
+            2) PAYLOAD="${PAYLOAD}==" ;;
+            3) PAYLOAD="${PAYLOAD}=" ;;
+          esac
+
+          echo "$PAYLOAD" | base64 -d | jq '{
+            iss,
+            sub,
+            aud,
+            repository,
+            repository_owner,
+            ref,
+            environment
+          }'    
       - name: Azure login (OIDC, no stored secret)
         uses: azure/login@v2
         with:
