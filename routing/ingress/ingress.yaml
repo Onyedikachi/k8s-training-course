@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false" # Set to true once you add SSL
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: yourdomain.com # Replace with your actual domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nestjs-backend-service # Matches your Service name
+            port:
+              number: 80
+# You no longer need your NestJS backend service to be a LoadBalancer. 
+# Change its type to ClusterIP in your YAML so it is hidden from the public 
+# internet and only accessible inside the cluster
