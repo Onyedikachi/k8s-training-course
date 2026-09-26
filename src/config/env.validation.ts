@@ -16,6 +16,7 @@ export const envValidationSchema = Joi.object({
   LOG_LEVEL: Joi.string().valid('error', 'warn', 'log', 'debug', 'verbose').default('log'),
   STARTUP_DELAY_MS: Joi.number().integer().min(0).max(120000).default(0),
   DEMO_ENDPOINTS_ENABLED: Joi.boolean().default(false),
+  METRICS_ENABLED: Joi.boolean().default(true),
   API_KEY: Joi.string().allow('').optional(),
   // Injected by Kubernetes via the Downward API (see k8s/base/deployment.yaml)
   POD_NAME: Joi.string().optional(),

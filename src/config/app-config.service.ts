@@ -36,6 +36,9 @@ export class AppConfigService {
   get demoEndpointsEnabled(): boolean {
     return this.config.get<boolean>('DEMO_ENDPOINTS_ENABLED', false) === true;
   }
+  get metricsEnabled(): boolean {
+    return this.config.get<boolean>('METRICS_ENABLED', true) !== false;
+  }
   get apiKey(): string | undefined {
     const key = this.config.get<string>('API_KEY');
     return key ? key : undefined;
@@ -61,6 +64,7 @@ export class AppConfigService {
       logLevel: this.logLevel,
       startupDelayMs: this.startupDelayMs,
       demoEndpointsEnabled: this.demoEndpointsEnabled,
+      metricsEnabled: this.metricsEnabled,
       apiKeyConfigured: Boolean(this.apiKey),
       pod: this.podName,
       node: this.nodeName,
