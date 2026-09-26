@@ -1,0 +1,70 @@
+# Alerting and recording rules. The Operator picks these up via the same `release` label.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nestjs-backend-rules
+  namespace: dev
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: nestjs-backend.recording
+      interval: 30s
+      rules:
+        # Pre-computed series keep dashboards fast and give you one definition of "error rate"
+        - record: job:http_requests:rate5m
+          expr: sum by (namespace, environment) (rate(http_requests_total[5m]))
+        - record: job:http_errors:ratio5m
+          expr: |
+            sum by (namespace, environment) (rate(http_requests_total{status_code=~"5.."}[5m]))
+              /
+            clamp_min(sum by (namespace, environment) (rate(http_requests_total[5m])), 0.001)
+
+    - name: nestjs-backend.alerts
+      rules:
+        - alert: NestjsBackendAbsent
+          expr: absent(up{job="nestjs-backend-service"}) == 1
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: No nestjs-backend targets are being scraped
+            description: Prometheus has no healthy target. Check the Service labels and the ServiceMonitor selector.
+
+        - alert: NestjsBackendNotReady
+          expr: min by (namespace, pod) (app_ready) == 0
+          for: 3m
+          labels: { severity: warning }
+          annotations:
+            summary: "{{ $labels.pod }} has been not-ready for 3 minutes"
+
+        - alert: NestjsBackendHighErrorRate
+          expr: job:http_errors:ratio5m > 0.05
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: "More than 5% of requests are failing in {{ $labels.namespace }}"
+            description: "Current ratio: {{ $value | humanizePercentage }}"
+
+        - alert: NestjsBackendHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le, namespace) (rate(http_request_duration_seconds_bucket[5m]))
+            ) > 0.5
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "p95 latency above 500 ms in {{ $labels.namespace }}"
+
+        - alert: NestjsBackendRestarting
+          expr: increase(kube_pod_container_status_restarts_total{container="nestjs-backend"}[15m]) > 2
+          for: 1m
+          labels: { severity: warning }
+          annotations:
+            summary: "{{ $labels.pod }} restarted more than twice in 15 minutes"
+
+        - alert: NestjsBackendEventLoopBlocked
+          expr: nodejs_eventloop_lag_seconds > 1
+          for: 2m
+          labels: { severity: warning }
+          annotations:
+            summary: "Node.js event loop lag above 1s on {{ $labels.pod }} - the process is blocked"

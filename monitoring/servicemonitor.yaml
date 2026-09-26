@@ -1,0 +1,50 @@
+# Tells the Prometheus Operator to scrape our Service. The Operator turns every ServiceMonitor
+# into scrape config automatically - you never edit prometheus.yml by hand.
+# `release: kube-prometheus-stack` matches the serviceMonitorSelector of the installed Prometheus.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nestjs-backend
+  namespace: dev
+  labels:
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames: [dev]
+  selector:
+    matchLabels:
+      app: nestjs-backend      # must match the Service's labels, not the Pod's
+  endpoints:
+    - port: http               # the *named* port on the Service
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      relabelings:
+        # carry pod and node names into every sample so you can group by replica in Grafana
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nestjs-backend
+  namespace: prod
+  labels:
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames: [prod]
+  selector:
+    matchLabels:
+      app: nestjs-backend
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node

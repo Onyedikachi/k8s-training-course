@@ -1,0 +1,435 @@
+# Auto-imported by the Grafana sidecar because of the grafana_dashboard label.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nestjs-backend-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  nestjs-backend.json: |
+    {
+      "title": "NestJS backend",
+      "uid": "nestjs-backend",
+      "tags": [
+        "training",
+        "nestjs",
+        "kubernetes"
+      ],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "10s",
+      "time": {
+        "from": "now-30m",
+        "to": "now"
+      },
+      "templating": {
+        "list": [
+          {
+            "name": "DS_PROMETHEUS",
+            "label": "Prometheus",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": {},
+            "hide": 0
+          },
+          {
+            "name": "namespace",
+            "label": "Namespace",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${DS_PROMETHEUS}"
+            },
+            "query": "label_values(http_requests_total, namespace)",
+            "refresh": 1,
+            "includeAll": false,
+            "multi": false,
+            "current": {
+              "text": "dev",
+              "value": "dev"
+            }
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "title": "Request rate (req/s)",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 0
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "targets": [
+            {
+              "expr": "sum by (route) (rate(http_requests_total{namespace=\"$namespace\"}[2m]))",
+              "legendFormat": "{{route}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "unit": "reqps"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 2,
+          "title": "Error ratio (5xx)",
+          "type": "stat",
+          "gridPos": {
+            "h": 8,
+            "w": 6,
+            "x": 12,
+            "y": 0
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(http_requests_total{namespace=\"$namespace\",status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total{namespace=\"$namespace\"}[5m])), 0.001)",
+              "legendFormat": "errors",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "unit": "percentunit"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 3,
+          "title": "Ready replicas",
+          "type": "stat",
+          "gridPos": {
+            "h": 8,
+            "w": 6,
+            "x": 18,
+            "y": 0
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "targets": [
+            {
+              "expr": "sum(app_ready{namespace=\"$namespace\"})",
+              "legendFormat": "ready",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {}
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 4,
+          "title": "Latency p50 / p95 / p99",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 8
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"$namespace\"}[5m])))",
+              "legendFormat": "p50",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              }
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"$namespace\"}[5m])))",
+              "legendFormat": "p95",
+              "refId": "B",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              }
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"$namespace\"}[5m])))",
+              "legendFormat": "p99",
+              "refId": "C",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "unit": "s"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 5,
+          "title": "Requests by status code",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 8
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "targets": [
+            {
+              "expr": "sum by (status_code) (rate(http_requests_total{namespace=\"$namespace\"}[2m]))",
+              "legendFormat": "{{status_code}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "unit": "reqps"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 6,
+          "title": "CPU per pod (cores)",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 16
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "targets": [
+            {
+              "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"$namespace\",container=\"nestjs-backend\"}[2m]))",
+              "legendFormat": "{{pod}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {}
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 7,
+          "title": "Memory per pod",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 16
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "targets": [
+            {
+              "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"$namespace\",container=\"nestjs-backend\"})",
+              "legendFormat": "{{pod}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "unit": "bytes"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 8,
+          "title": "Node.js heap used",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 16
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "targets": [
+            {
+              "expr": "nodejs_heap_size_used_bytes{namespace=\"$namespace\"}",
+              "legendFormat": "{{pod}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "unit": "bytes"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 9,
+          "title": "Event loop lag",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 0,
+            "y": 24
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "targets": [
+            {
+              "expr": "nodejs_eventloop_lag_seconds{namespace=\"$namespace\"}",
+              "legendFormat": "{{pod}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "unit": "s"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 10,
+          "title": "Container restarts (15m)",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 8,
+            "y": 24
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "targets": [
+            {
+              "expr": "increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\",container=\"nestjs-backend\"}[15m])",
+              "legendFormat": "{{pod}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {}
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 11,
+          "title": "Items held per replica",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 16,
+            "y": 24
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "targets": [
+            {
+              "expr": "items_total{namespace=\"$namespace\"}",
+              "legendFormat": "{{pod}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {}
+            },
+            "overrides": []
+          }
+        }
+      ]
+    }

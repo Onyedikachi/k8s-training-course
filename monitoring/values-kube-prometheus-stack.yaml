@@ -1,0 +1,34 @@
+# Trimmed values for a one-day training cluster: small footprint, short retention, no persistence
+# (a restart loses data - fine for a workshop, never for production).
+prometheus:
+  prometheusSpec:
+    retention: 6h
+    scrapeInterval: 15s
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits:   { cpu: "1",  memory: 2Gi }
+    # Empty selectors = "discover ServiceMonitors/Rules in ALL namespaces regardless of labels".
+    # Handy in a workshop; in production keep the default label-scoped selectors.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+grafana:
+  adminPassword: training123          # workshop only
+  defaultDashboardsTimezone: browser
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard        # any ConfigMap with this label is imported automatically
+      searchNamespace: ALL
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+prometheus-node-exporter:
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+kube-state-metrics:
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }

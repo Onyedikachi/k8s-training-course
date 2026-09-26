@@ -15,9 +15,14 @@ The original curriculum's theory sections are unchanged; only the hands-on flow 
 | 12:00–13:00 | Lunch | | |
 | 13:00–14:45 | 4 · GitHub Actions CI/CD | 20 | OIDC setup, dev + prod pipelines, approval gate, public LoadBalancer |
 | 14:45–15:00 | Break | | |
-| 15:00–16:05 | 5 · Administration | 20 | RBAC, quotas, LimitRange, metrics, debugging |
-| 16:05–16:45 | 6 · OpenShift | 15 | Instructor demo on Developer Sandbox (optional participant lab) |
-| 16:45–17:00 | 7 · Wrap-up | 15 | **Cleanup** |
+| 15:00–15:40 | 5 · Administration | 15 | RBAC, quotas, LimitRange, debugging |
+| 15:40–16:25 | 5b · Monitoring with Prometheus | 15 | Install stack, scrape app, PromQL, Grafana, alerts, HPA |
+| 16:25–16:50 | 6 · OpenShift | 10 | Instructor demo on Developer Sandbox |
+| 16:50–17:00 | 7 · Wrap-up | 10 | **Cleanup** |
+
+> Monitoring needs the Helm stack running before the module starts. Kick off
+> `scripts/setup-monitoring.sh aks` **at the start of the 14:45 break** — it takes 3–5 minutes
+> and you do not want the room watching a progress bar.
 
 ---
 
@@ -28,12 +33,13 @@ The original curriculum's theory sections are unchanged; only the hands-on flow 
 **T-2 days — verify your own subscription**
 ```bash
 az login
-az vm list-usage --location westeurope -o table | grep -i "Standard DSv3"   # need >= 4 vCPU per participant cluster
+az vm list-usage --location westeurope -o table | grep -i "Standard DSv3"   # need >= 6 vCPU per participant (3 x Standard_D2s_v3; the monitoring stack needs the 3rd node)
 az provider show -n Microsoft.ContainerService --query registrationState    # must be Registered
 az ad app create --display-name permission-probe --query appId -o tsv && az ad app delete --id <that id>   # can participants create app registrations? if not: use plan B (one shared app, see 4.1)
 ```
 **T-1 day**
 - Fork/push this repo to the training org; create branches `develop`, `main`, `openshift`. Protect nothing (participants fork it).
+- Dry-run `scripts/setup-monitoring.sh aks` once on the fallback cluster and delete it again; the first `helm repo update` is the slowest part.
 - Pre-provision one **fallback AKS + ACR** with `scripts/setup-aks.sh` (`RESOURCE_GROUP=k8s-training-fallback`). Grant participants `Azure Kubernetes Service Cluster User Role` on it.
 - Create a **Developer Sandbox** account (https://developers.redhat.com/developer-sandbox) and confirm `oc login` works.
 - Run the entire runbook once end-to-end on a clean machine. Budget 90 minutes.
@@ -42,7 +48,7 @@ az ad app create --display-name permission-probe --query appId -o tsv && az ad a
 
 ### Prerequisite mail (docs-prereqs)
 - Laptop with 8 GB RAM free, admin rights. Windows users: WSL2 + Ubuntu, run everything inside WSL.
-- Install: Docker Desktop (or Podman Desktop), `minikube`, `kubectl`, `az` CLI, `node` 22 LTS, `git`, `curl`. Optional: `oc`.
+- Install: Docker Desktop (or Podman Desktop), `minikube`, `kubectl`, `helm`, `az` CLI, `node` 22 LTS, `git`, `curl`. Optional: `oc`.
 - Azure subscription where you can create resource groups (check: `az group create -n probe-rg -l westeurope && az group delete -n probe-rg -y`).
 - GitHub account; fork the training repository.
 - Run `scripts/preflight.sh` from the fork and send the output if anything is red.
@@ -216,10 +222,11 @@ kubectl run tiny --image=registry.k8s.io/pause:3.9 -n dev    # accepted: LimitRa
 kubectl get pod tiny -n dev -o jsonpath='{.spec.containers[0].resources}{"\n"}'
 kubectl delete pod tiny -n dev
 
-# 5.3 metrics
+# 5.3 metrics-server: the built-in, 60-second-window resource view (NOT Prometheus)
 kubectl top nodes
 kubectl top pods -n dev
 kubectl top pods -n prod --containers
+# note: `kubectl top` has no history and no alerting - that is exactly why Module 5b exists
 
 # 5.4 debugging toolbox
 kubectl logs -n dev deploy/nestjs-backend --tail=20
@@ -230,7 +237,101 @@ kubectl get events -n dev --sort-by=.lastTimestamp | tail
 kubectl describe pod -n dev -l app=nestjs-backend | sed -n '/Conditions/,/Events/p'
 ```
 
-## Module 6 · 16:05 OpenShift (instructor demo)
+
+## Module 5b · 15:40 Monitoring with Prometheus and Grafana
+
+Theory (15 min): pull vs push; what the Prometheus Operator adds (`ServiceMonitor`,
+`PrometheusRule` as ordinary Kubernetes objects); counters vs gauges vs histograms;
+the four components in the chart (Prometheus, Alertmanager, Grafana, node-exporter,
+kube-state-metrics). Background in `monitoring/README-monitoring.md`.
+
+```bash
+# 5b.0 started during the break - confirm it is up
+kubectl get pods -n monitoring
+# if you skipped the break step:  scripts/setup-monitoring.sh aks   (3-5 min)
+
+# 5b.1 the app already exposes metrics - look at them raw first
+kubectl port-forward -n dev svc/nestjs-backend-service 8080:80 &
+curl -s localhost:8080/metrics | head -30
+curl -s localhost:8080/metrics | grep -E '^(http_requests_total|app_ready|items_total|app_info)'
+# point out: route="/api/items/:id" NOT "/api/items/42"  -> cardinality
+
+# 5b.2 how Prometheus finds it
+kubectl get servicemonitor -A
+kubectl describe servicemonitor nestjs-backend -n dev | sed -n '/Spec/,$p'
+# Service labels  <- ServiceMonitor selector  <- Prometheus serviceMonitorSelector
+
+# 5b.3 open the UIs (separate terminals)
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090 &
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana    3001:80 &
+# Prometheus  http://localhost:9090   -> Status > Target health: nestjs-backend should be UP (2 targets)
+# Grafana     http://localhost:3001   -> admin / training123
+```
+
+**5b.4 Generate traffic, then explore PromQL** (run the load generator in its own terminal):
+```bash
+scripts/load-test.sh dev 300
+```
+In the Prometheus UI, run these one at a time and switch to the Graph tab:
+```promql
+up{job="nestjs-backend-service"}
+sum by (route) (rate(http_requests_total[2m]))
+sum by (status_code) (rate(http_requests_total[2m]))
+histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))
+app_info
+sum by (pod) (rate(container_cpu_usage_seconds_total{container="nestjs-backend"}[2m]))
+```
+Explain while they watch: a counter always rises, so `rate()` is mandatory; `[2m]` is the
+lookback window; `sum by (...)` drops every other label.
+
+**5b.5 Grafana**
+```
+Dashboards > "NestJS backend"            # our dashboard, imported from a ConfigMap by the sidecar
+Dashboards > "Kubernetes / Compute Resources / Namespace (Pods)"   # shipped with the chart
+```
+Switch the `namespace` variable between `dev` and `prod`. Show that the dashboard JSON lives in
+`monitoring/grafana-dashboard-configmap.yaml` — dashboards as code, not click-ops.
+
+**5b.6 Make an alert fire (the memorable bit)**
+```bash
+kubectl get prometheusrule -n dev
+# Prometheus UI > Alerts: all green
+
+curl -s -X POST localhost:8080/demo/hang        # blocks the event loop for 120s
+# watch in Prometheus:  nodejs_eventloop_lag_seconds
+# NestjsBackendEventLoopBlocked goes PENDING (for: 2m) then FIRING
+# meanwhile the liveness probe fails and kubelet restarts the container:
+kubectl get pods -n dev -w
+```
+Also show the alert in Alertmanager (`kubectl port-forward -n monitoring svc/kube-prometheus-stack-alertmanager 9093:9093`),
+and where a Slack/email receiver would be configured (`monitoring/README-monitoring.md`).
+
+**5b.7 Autoscaling under load**
+```bash
+kubectl apply -f monitoring/hpa.yaml
+kubectl get hpa -n dev                       # TARGETS shows <current>%/60%
+scripts/load-test.sh dev 300                 # in another terminal
+kubectl get hpa,pods -n dev -w               # replicas climb 2 -> 4 -> ... up to 8
+# Grafana: request rate rises, CPU per pod falls as new replicas absorb the load
+# scale-down takes ~2 min after load stops (stabilizationWindowSeconds)
+kubectl delete hpa nestjs-backend -n dev     # otherwise it fights the next scale command
+```
+Be explicit: this HPA uses **metrics-server** (CPU), not Prometheus. Scaling on a PromQL
+expression needs `prometheus-adapter` — name it as the next step, do not install it today.
+
+**5b.8 Managed alternative** (mention, 1 min): `az aks update --enable-azure-monitor-metrics`
+gives Azure Managed Prometheus + Grafana and consumes the very same ServiceMonitor CRDs.
+
+```bash
+kill %1 %2 %3 2>/dev/null   # stop the port-forwards
+```
+
+Common issues: target `DOWN` with "connection refused" → ServiceMonitor `port:` must be the port
+**name** `http`; target missing entirely → ServiceMonitor label/selector mismatch, check
+`kubectl get servicemonitor -n dev -o yaml`; Grafana dashboard absent → the ConfigMap needs label
+`grafana_dashboard: "1"` and the sidecar searches all namespaces; no data in panels → no traffic yet, run the load test.
+
+## Module 6 · 16:25 OpenShift (instructor demo)
 Follow `openshift/README-openshift.md` step by step on the Developer Sandbox. Show, in this order:
 1. Same image, same ConfigMap idea, different `securityContext` story (`oc get pod -o yaml | grep -A5 securityContext` – UID assigned by SCC).
 2. `Route` vs `LoadBalancer` – public HTTPS with no cloud load balancer.
@@ -240,8 +341,9 @@ Follow `openshift/README-openshift.md` step by step on the Developer Sandbox. Sh
 ## Module 7 · 16:45 Wrap-up
 Key takeaways as in the original. Then, everyone:
 ```bash
+helm uninstall kube-prometheus-stack -n monitoring 2>/dev/null; kubectl delete ns monitoring 2>/dev/null
 minikube delete
-source scripts/env.sh && scripts/cleanup.sh      # deletes AKS, ACR, public IPs
+source scripts/env.sh && scripts/cleanup.sh      # deletes AKS, ACR, public IPs (this alone is enough)
 az ad app delete --id <APP_ID from 4.1>          # optional
 ```
 Instructor deletes the fallback resource group.

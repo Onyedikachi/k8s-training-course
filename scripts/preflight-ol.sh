@@ -11,7 +11,6 @@ need docker --version "Docker Desktop or Podman (alias docker=podman)"
 need minikube version "https://minikube.sigs.k8s.io/docs/start/"
 need kubectl "version --client" "https://kubernetes.io/docs/tasks/tools/"
 need az version "https://learn.microsoft.com/cli/azure/install-azure-cli"
-need helm version "https://helm.sh/docs/intro/install/ - needed for the Prometheus module"
 need curl --version "curl"
 
 NODE_MAJOR=$(node -v 2>/dev/null | sed 's/v\([0-9]*\).*/\1/')
